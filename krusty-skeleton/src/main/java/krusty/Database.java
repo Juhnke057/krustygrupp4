@@ -5,6 +5,7 @@ import spark.Response;
 
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
@@ -15,6 +16,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -104,7 +106,7 @@ public class Database {
 	public String reset(Request req, Response res) throws SQLException {
 		String create = readCreate();
 		String init = readInit();
-
+	
 		String delimiter = ";";
 
 		Scanner scanner = new Scanner(create).useDelimiter(delimiter);
@@ -123,12 +125,10 @@ public class Database {
 			currentStatement = conn.createStatement();
 			currentStatement.execute(rawStatement);
 		}
-
 		return "{\n\t\"status\": \"ok\"\n}";
-
 	
 	}
-
+	
 	private String readCreate() {
 		try {
 			String path = "src/main/resources/public/create-schema.sql";
@@ -138,11 +138,17 @@ public class Database {
 		}
 		return "";
 	}
-
 	private String readInit() {
 		try {
 			String path = "src/main/resources/public/initial-data.sql";
-			return new String(Files.readAllBytes(Paths.get(path)));
+			List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i<lines.size(); i++) {
+				String liners = lines.get(i).toString();
+				sb.append(liners);
+			}
+			return sb.toString();
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -169,16 +175,17 @@ public class Database {
 					//If it can execute update we need to subtract ingredients amount from storage
 				subtract_ingredient(cookieName);	
 				}
-				
+
  
 			} catch(SQLException e) {
 				e.printStackTrace();
 				return Jsonizer.anythingToJson("error", "status");
 				}
 
-				return Jsonizer.anythingToJson("unknown cookie", "status");
+				return "{\n\t\"status\": \"ok\" ," +
+				"\n\t\"id\": " + palletID + "\n}";
 		}
-		return Jsonizer.anythingToJson(palletID, "id");
+		return "{\n\t\"status\": \"unknown cookie\"\n}";
 	}
 	//Checks if cookie name exists in database
 	private boolean cookie_exists(String cookieName) {
