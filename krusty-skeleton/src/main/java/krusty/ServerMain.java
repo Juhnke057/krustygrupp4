@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 import static spark.Spark.*;
 
 public class ServerMain {
-	public static int PORT = 3306;
+	public static int PORT = 8888;
 	public static String API_ENTRYPOINT = "/api/v1";
 	
 	private Database db;

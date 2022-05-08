@@ -75,4 +75,6 @@ VALUES
 ('Tango', 'Sodium bicarbonate', '4', 'g'),
 ('Tango', 'Sugar', '250', 'g'),
 ('Tango', 'Vanilla', '2', 'g');
+
+
 SET FOREIGN_KEY_CHECKS = 1;

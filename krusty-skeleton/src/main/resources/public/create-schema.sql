@@ -1,12 +1,12 @@
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE K_customers;
-DROP TABLE K_cookies;
-DROP TABLE K_pallets;
-DROP TABLE K_orders;
-DROP TABLE K_order_spec;
-DROP TABLE K_rawmaterials;
-DROP TABLE K_recipes;
-DROP TABLE K_updates;
+DROP TABLE IF EXISTS K_customers;
+DROP TABLE IF EXISTS K_cookies;
+DROP TABLE IF EXISTS K_pallets;
+DROP TABLE IF EXISTS K_orders;
+DROP TABLE IF EXISTS K_order_spec;
+DROP TABLE IF EXISTS K_rawmaterials;
+DROP TABLE IF EXISTS K_recipes;
+DROP TABLE IF EXISTS K_updates;
 
 
 Create table K_customers (
@@ -27,7 +27,7 @@ Create table K_pallets (
     delivery_date date,
     address varchar(255),
     packed date,
-    blocked bit,
+    blocked text,
     primary key (palletId),
     foreign key (cookies_cookieName) references K_cookies(cookieName)
 );

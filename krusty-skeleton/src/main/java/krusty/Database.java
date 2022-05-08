@@ -2,25 +2,24 @@ package krusty;
 
 import spark.Request;
 import spark.Response;
-
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Scanner;
-
-import com.google.protobuf.TextFormat.ParseException;
 
 public class Database {
 	/**   
@@ -42,7 +41,7 @@ public class Database {
 		}
 	}
 
-	// TODO: Implement and change output in all methods below!
+
 
 	public String getCustomers(Request req, Response res) {
 		String sql = "SELECT name AS name, address FROM K_customers";
@@ -84,7 +83,7 @@ public class Database {
 	}
 
 	public String getRecipes(Request req, Response res) {
-		String sql = "SELECT cookieName, rawmaterials_name, amount, unit FROM K_recipes";
+		String sql = "SELECT cookies_cookieName, rawmaterials_name, amount, unit FROM K_recipes";
 		String title = "recipes";
 
 		try {
@@ -97,10 +96,80 @@ public class Database {
         return null; 
 	}
 
+	public String getPallets(Request req, Response res) throws SQLException {
+		String sql = "SELECT palletId AS id, cookies_cookieName AS cookie, production_date, address AS customer, blocked FROM K_pallets";
+		String title = "pallets";
+		StringBuilder sb = new StringBuilder();
+	
+		sb.append(sql);
+	
+		List<String> filerList = Arrays.asList("from", "to", "cookie", "blocked");
+		HashMap<String, String> map = new HashMap<String, String>();
 
-/* IS FUCKED */
-	public String getPallets(Request req, Response res) throws SQLException, ParseException{
-		return "{}"; 
+		for (String filter : filerList) {
+			if (req.queryParams(filter) != null) {
+				map.put(filter, req.queryParams(filter));
+			}
+		}
+
+		if (map.size() > 0) {
+			sb.append(" WHERE");
+		}
+	
+		int size = 1;
+
+		for (Map.Entry<String, String> entry : map.entrySet()) {
+			switch (entry.getKey()) {
+				case "from":
+					sb.append(" production_date >= ?");
+					break;
+				case "to":
+					sb.append(" production_date <= ?");
+					break;
+				case "blocked":
+					sb.append(" blocked = ?");
+					break;
+				case "cookie":
+					sb.append(" cookies_cookieName = ?");
+					break;
+				default:
+					break;
+			}
+			if (map.size() > size) {
+				size++;
+				sb.append(" AND");
+			}
+		}
+	
+		PreparedStatement stmt = conn.prepareStatement(sb.toString());
+	
+		int i = 1;
+	
+		for (Map.Entry<String, String> entry : map.entrySet()) {
+			switch (entry.getKey()) {
+				case "from":
+					stmt.setDate(i, Date.valueOf(req.queryParams("from")));
+					break;
+				case "to":
+					stmt.setDate(i, Date.valueOf(req.queryParams("to")));
+					break;
+				case "blocked":
+					stmt.setString(i, req.queryParams("blocked"));
+					break;
+				case "cookie":
+					stmt.setString(i, req.queryParams("cookie"));
+					break;
+				default:
+					break;
+			}
+			i++;
+		}
+	
+		ResultSet rs = stmt.executeQuery();
+	
+		String result = Jsonizer.toJson(rs, title);
+	
+		return result;
 	}
 
 	public String reset(Request req, Response res) throws SQLException {
@@ -158,24 +227,55 @@ public class Database {
 	public String createPallet(Request req, Response res) {
 		String cookieName = req.queryParams("cookie");
 		String time = LocalDate.now().toString();
-		//For auto Increment
+
 		int palletID = -1;
-		String sql = "INSERT INTO K_pallets (production_date, cookies_cookieName) VALUES (?, ?)";
+		String sqlPallet = "INSERT INTO K_pallets (production_date, cookies_cookieName, blocked, address) VALUES (?, ?, 'no', ?)";
+		String sqlOrder = "INSERT INTO K_orders (pallets_PalletID, customers_name) VALUES (?, ?)";
+		String sqlOrderSpec = "INSERT INTO K_order_spec (amount, cookies_cookieName, orders_orderID) VALUES (1, ?, ?)";
+
+		List<String> customerList = Arrays.asList("Småbröd AB", "Kaffebröd AB", "Bjudkakor AB", "Kalaskakor AB", "Partykakor AB", "Gästkakor AB", "Skånekakor AB", "Finkakor AB");
+		Random r = new Random();
+		
+		int randomitem = r.nextInt(8);
+		String randomCustomer = customerList.get(randomitem);
+
+
 		if(cookie_exists(cookieName)) {
-			try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+			try  {
+				String addressquery = "SELECT address FROM K_customers WHERE name = ?";
+				PreparedStatement psAq = conn.prepareStatement(addressquery);
+				psAq.setString(1, randomCustomer);
+				ResultSet rsAq = psAq.executeQuery();
+				String addressCustomer = "test";
+				if (rsAq.next()) {
+					addressCustomer = rsAq.getString("address");
+				}
+				
+
+				PreparedStatement ps = conn.prepareStatement(sqlPallet, Statement.RETURN_GENERATED_KEYS);
 				ps.setString(1, time);
 				ps.setString(2, cookieName);
+				ps.setString(3, addressCustomer);
 				boolean result = ps.executeUpdate() != 0;
 				ResultSet rs = ps.getGeneratedKeys();
+
 				if(rs.next()) {
 					palletID = rs.getInt(1);
 				}
-				ps.close();
+				
 				if(result) {
-					//If it can execute update we need to subtract ingredients amount from storage
 				subtract_ingredient(cookieName);	
 				}
+				
+				PreparedStatement ps1 = conn.prepareStatement(sqlOrder);
+				ps1.setInt(1, palletID);
+				ps1.setString(2, randomCustomer);
+				ps1.executeUpdate();
 
+				PreparedStatement ps2 = conn.prepareStatement(sqlOrderSpec);
+				ps2.setString(1, cookieName);
+				ps2.setInt(2, palletID);
+				ps2.executeUpdate();
  
 			} catch(SQLException e) {
 				e.printStackTrace();
@@ -187,7 +287,7 @@ public class Database {
 		}
 		return "{\n\t\"status\": \"unknown cookie\"\n}";
 	}
-	//Checks if cookie name exists in database
+
 	private boolean cookie_exists(String cookieName) {
 		String sql = "Select cookieName from K_cookies where cookieName = ?";
 
@@ -207,43 +307,38 @@ public class Database {
 		}
 		return false;
 	}
-	//Subtracts amount needed for pallet from storage
+
 	private void subtract_ingredient(String cookieName) {
 		HashMap<String, Integer> ingredients = new HashMap<String, Integer>();
 
 		try{
 			conn.setAutoCommit(false);
-			//Check how much of our ingredients are in storage
+
 			String sql = "SELECT K_rawmaterials.name, K_rawmaterials.amount from K_rawmaterials"+
 			" INNER JOIN K_recipes on K_recipes.rawmaterials_name = K_rawmaterials.name"+
 			" WHERE K_recipes.cookies_cookieName = ?";
 			PreparedStatement ps = conn.prepareStatement(sql);
 			ps.setString(1, cookieName);
 			ResultSet rs = ps.executeQuery();
-			//Adds materials in sotorage
+
 			while (rs.next()) {
-				String ingredient = rs.getString("name"); // add ingredient and total in storage into map
+				String ingredient = rs.getString("name"); 
 				int amount = rs.getInt("amount");
-				System.out.println(ingredient + " "+amount);
-				ingredients.put(ingredient, amount); // Map with total amount of each ingredient
+				ingredients.put(ingredient, amount); 
 			}
 			ps.close();
-			//Selects amount needed for cooke
+
 			sql = "SELECT rawmaterials_name, amount from K_recipes WHERE cookies_cookieName = ?";
 			ps = conn.prepareStatement(sql);
 			ps.setString(1, cookieName);
 			rs = ps.executeQuery();
-			//materials - amount needed
 			while(rs.next()) {
 				String ingredient = rs.getString("rawmaterials_name");
 				int amount = rs.getInt("amount");
-				//Subtract amount to make cookies and update map
 				int newAmount = ingredients.get(ingredient) - amount*54;
-				System.out.println(ingredient + " "+newAmount);
 				ingredients.put(ingredient, newAmount);
 			}
 			ps.close();
-			//Update in SQL database
 			for(Map.Entry<String, Integer> entry : ingredients.entrySet()) {
 				sql = "UPDATE K_rawmaterials SET K_rawmaterials.amount  = ? WHERE K_rawmaterials.name = ?";
 				ps = conn.prepareStatement(sql);
